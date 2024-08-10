@@ -136,7 +136,7 @@ const logoutUser = asyncHandler(async (req, res) => {
     // 1. Update the user's refresh token field in the database
     await User.findByIdAndUpdate(
         req.user._id,
-        { $set: { refreshToken: undefined } },
+        { $unset: { refreshToken: 1 } }, // this removes the refresh token
         { new: true }
     );
 
@@ -307,7 +307,7 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
     // 1. Extract user ID and current password from the request body
     const { oldPassword, newPassword, confirmPassword } = req.body;
 
-    if (newPassword === confirmPassword) {
+    if (newPassword !== confirmPassword) {
         throw new ApiError(400, 'New password and confirm password must match')
     }
 
@@ -328,9 +328,16 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 
 // Get the current user
 const getCurrentUser = asyncHandler(async (req, res) => {
+    console.log(req, 'Current');
     return res
         .status(200)
-        .json(new ApiResponse(200, req.user, 'User details retrieved successfully'))
+        .json(
+            new ApiResponse(
+                200, 
+                req.user, 
+                'User details retrieved successfully'
+            )
+        )
 })
 
 // Get Channel Profile
