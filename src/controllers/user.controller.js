@@ -1,6 +1,9 @@
 import { asyncHandler } from '../utils/asyncHandler.js';
-
-const registerUser = asyncHandler(async(req, res) => {
+import { ApiError } from '../utils/ApiError.js';
+import { User } from '../models/User.model.js';
+import { uploadOnCloudinary } from '../utils/cloudnary.js';
+import { ApiResponse } from '../utils/ApiResponse.js';
+const registerUser = asyncHandler(async (req, res) => {
     // Steps to register a user
     // 1. Get user details from frontend
     // 2. Validate the request body
@@ -13,20 +16,63 @@ const registerUser = asyncHandler(async(req, res) => {
     // 9. Save the user to the database
 
     // Simulating user registration
-    const { email } = req.body;
-    console.log('email', email);
-    // const user = {
-    //     name: req.body.name,
-    //     email: req.body.email,
-    //     password: req.body.password // Assuming password is hashed
-    // }
+    const { email, fullName, username, password } = req.body;
 
-    // Save the user to the database
-    // Example: await User.create(user)
+    if (
+        [fullName, username, password, email].some((feild) =>
+            feild?.trim() === "")
+    ) {
+        throw new ApiError(400, 'All fields are required')
+    }
 
-    res.status(200).json({
-        message: 'User registered successfully'
+    // Check if user already exists
+    const existedUser = User.findOne({ 
+        $or: [{ username, email }]
     })
+
+    if (existedUser) {
+        throw new ApiError(409, 'User already exists')
+    }
+
+    const avatarLocalPath = req.files?.avatar[0]?.path;
+    const coverImageLocalPath = req.files?.coverImage[0]?.path;
+
+    // check for avatar
+    if (!avatarLocalPath) {
+        throw new ApiError(400, 'Please upload an avatar image')
+    }
+
+
+    // upload images to cloudnary
+    // Example: const { secure_url: avatarUrl } = await cloudinary.uploader.upload(avatarLocalPath)
+    // Example: const { secure_url: coverImageUrl } = await cloudinary.uploader.upload(coverImageLocalPath)
+    const avatar = await uploadOnCloudinary(avatarLocalPath)
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath)
+
+    if(!avatar){
+        throw new ApiError(500, 'Failed to upload avatar image')
+    }
+
+    const user = await User.create({
+        fullName,
+        avatar: avatar.url,
+        coverImage: coverImage?.url || '',
+        username: username.loLowerCase(),
+        email,
+        password,
+    })
+
+    const createdUser = await User.findById(user._id).select(
+        "-password -refreshToken"
+    )
+
+    if(!createdUser){
+        throw new ApiError(500, 'Failed to create user')
+    }
+
+    return res.status(201).json(
+        new ApiResponse(200, createdUser, "User registered successfully"),
+    )
 })
 
 export { registerUser };
