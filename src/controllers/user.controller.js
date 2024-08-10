@@ -181,9 +181,6 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
         // 3. Generate a new access token
         const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
 
-        // 4. Fetch the user excluding sensitive fields
-        const refreshedUser = await User.findById(user._id).select('-password -refreshToken');
-
         // 5. Set cookie options
         const options = {
             httpOnly: true,
@@ -210,14 +207,12 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     }
 })
 
-
 // Update profile picture
-
-const updateUserAvatar = asyncHandler( async (req, res) => {
+const updateUserAvatar = asyncHandler(async (req, res) => {
     // 1. Extract user ID and updated avatar from the request body
     const avatarLocalPath = req.file?.path
 
-    if(!avatarLocalPath){
+    if (!avatarLocalPath) {
         throw new ApiError(400, 'Please upload an avatar image');
     }
 
@@ -246,12 +241,11 @@ const updateUserAvatar = asyncHandler( async (req, res) => {
 
 
 // Update cover picture
-
-const updateUserCoverIamge = asyncHandler( async (req, res) => {
+const updateUserCoverIamge = asyncHandler(async (req, res) => {
     // 1. Extract user ID and updated avatar from the request body
     const coverImageLocalPath = req.file?.path
 
-    if(!coverImageLocalPath){
+    if (!coverImageLocalPath) {
         throw new ApiError(400, 'Please upload an cover image');
     }
 
@@ -274,13 +268,12 @@ const updateUserCoverIamge = asyncHandler( async (req, res) => {
     const updatedUser = await User.findById(user._id).select('-password -refreshToken');
 
     return res
-    .status(200)
-    .json(new ApiResponse(200, updatedUser, 'User cover image updated successfully'));
+        .status(200)
+        .json(new ApiResponse(200, updatedUser, 'User cover image updated successfully'));
 })
 
 
 // Update user details
-
 const updateAccountDetails = asyncHandler(async (req, res) => {
     // 1. Extract user ID and updated details from the request body
     const { fullName, email, username } = req.body;
@@ -309,7 +302,6 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
 
 
 // Update password
-
 const changeCurrentPassword = asyncHandler(async (req, res) => {
     // 1. Extract user ID and current password from the request body
     const { oldPassword, newPassword, confirmPassword } = req.body;
@@ -333,11 +325,86 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, {}, 'Password updated successfully'))
 })
 
+// Get the current user
 const getCurrentUser = asyncHandler(async (req, res) => {
     return res
         .status(200)
         .json(new ApiResponse(200, req.user, 'User details retrieved successfully'))
 })
+
+// Get Channel Profile
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+    const { username } = req.params;
+    if (!username) {
+        throw new ApiError(400, 'Username is required');
+    }
+
+    const channel = await User.aggregate([
+        {
+            $match: {
+                username: username?.toLowerCase()
+            }
+        },
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "channel",
+                as: "subscriber"
+            }
+        },
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "subscriber",
+                as: "subscribedTo"
+            }
+        },
+        {
+            $addFields: {
+                subscribersCount: {
+                    $size: "$subscriber"
+                },
+                channelCount: {
+                    $size: "$subscribedTo"
+                },
+                isSubscribed: {
+                    $cond: {
+                        if: {
+                            $in: [req.user?._id, "$subscriber.subscribers"],
+                            then: true,
+                            else: false
+                        }
+                    }
+                }
+            }
+        },
+        {
+            $project: {
+                _id: 1,
+                fullName: 1,
+                username: 1,
+                avatar: 1,
+                coverImage: 1,
+                subscribersCount: 1,
+                channelCount: 1,
+                isSubscribed: 1,
+                email: 1
+            }
+        }
+    ])
+
+    if (!channel?.length) {
+        throw new ApiError(404, 'Channel does not exists');
+    }
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200, channel[0], 'Channel details retrieved successfully'))
+})
+
+
 
 export {
     registerUser,
@@ -348,5 +415,6 @@ export {
     getCurrentUser,
     updateAccountDetails,
     updateUserAvatar,
-    updateUserCoverIamge
+    updateUserCoverIamge,
+    getUserChannelProfile
 };
