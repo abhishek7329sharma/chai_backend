@@ -210,4 +210,143 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     }
 })
 
-export { registerUser, loginUser, logoutUser, refreshAccessToken };
+
+// Update profile picture
+
+const updateUserAvatar = asyncHandler( async (req, res) => {
+    // 1. Extract user ID and updated avatar from the request body
+    const avatarLocalPath = req.file?.path
+
+    if(!avatarLocalPath){
+        throw new ApiError(400, 'Please upload an avatar image');
+    }
+
+    const avatar = await uploadOnCloudinary(avatarLocalPath)
+    if (!avatar) {
+        throw new ApiError(500, 'Failed to upload avatar image while updating');
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        { $set: { avatar: avatar?.url } },
+        { new: true }
+    ).select('-password -refreshToken');
+
+    if (!user) {
+        throw new ApiError(404, 'User not found');
+    }
+
+    // 2. Fetch the updated user excluding sensitive fields
+    const updatedUser = await User.findById(user._id).select('-password -refreshToken');
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, updatedUser, 'User avatar updated successfully'));
+})
+
+
+// Update cover picture
+
+const updateUserCoverIamge = asyncHandler( async (req, res) => {
+    // 1. Extract user ID and updated avatar from the request body
+    const coverImageLocalPath = req.file?.path
+
+    if(!coverImageLocalPath){
+        throw new ApiError(400, 'Please upload an cover image');
+    }
+
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath)
+    if (!coverImage) {
+        throw new ApiError(500, 'Failed to upload cover image while updating');
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        { $set: { coverImage: coverImage?.url } },
+        { new: true }
+    ).select('-password -refreshToken');
+
+    if (!user) {
+        throw new ApiError(404, 'User not found');
+    }
+
+    // 2. Fetch the updated user excluding sensitive fields
+    const updatedUser = await User.findById(user._id).select('-password -refreshToken');
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200, updatedUser, 'User cover image updated successfully'));
+})
+
+
+// Update user details
+
+const updateAccountDetails = asyncHandler(async (req, res) => {
+    // 1. Extract user ID and updated details from the request body
+    const { fullName, email, username } = req.body;
+
+    if (!fullName || !email || !username) {
+        throw new ApiError(400, 'All fields are required');
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user._id,
+        { $set: { fullName, email, username: username.toLowerCase() } },
+        { new: true }
+    ).select('-password -refreshToken');
+
+    if (!user) {
+        throw new ApiError(404, 'User not found');
+    }
+
+    // 2. Fetch the updated user excluding sensitive fields
+    const updatedUser = await User.findById(user._id).select('-password -refreshToken');
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, updatedUser, 'User details updated successfully'));
+})
+
+
+// Update password
+
+const changeCurrentPassword = asyncHandler(async (req, res) => {
+    // 1. Extract user ID and current password from the request body
+    const { oldPassword, newPassword, confirmPassword } = req.body;
+
+    if (newPassword === confirmPassword) {
+        throw new ApiError(400, 'New password and confirm password must match')
+    }
+
+    const user = await User.findById(req.user?._id)
+
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword)
+
+    if (!isPasswordCorrect) {
+        throw new ApiError(401, 'Incorrect old password')
+    }
+
+    user.password = newPassword
+    await user.save({ validateBeforeSave: false })
+    res
+        .status(200)
+        .json(new ApiResponse(200, {}, 'Password updated successfully'))
+})
+
+const getCurrentUser = asyncHandler(async (req, res) => {
+    return res
+        .status(200)
+        .json(new ApiResponse(200, req.user, 'User details retrieved successfully'))
+})
+
+export {
+    registerUser,
+    loginUser,
+    logoutUser,
+    refreshAccessToken,
+    changeCurrentPassword,
+    getCurrentUser,
+    updateAccountDetails,
+    updateUserAvatar,
+    updateUserCoverIamge
+};
