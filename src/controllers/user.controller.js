@@ -3,6 +3,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { User } from '../models/User.model.js';
 import { uploadOnCloudinary } from '../utils/cloudnary.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
+
 const registerUser = asyncHandler(async (req, res) => {
     // Steps to register a user
     // 1. Get user details from frontend
@@ -26,22 +27,26 @@ const registerUser = asyncHandler(async (req, res) => {
     }
 
     // Check if user already exists
-    const existedUser = User.findOne({ 
+    const existedUser = await User.findOne({ 
         $or: [{ username, email }]
     })
 
     if (existedUser) {
         throw new ApiError(409, 'User already exists')
     }
-
     const avatarLocalPath = req.files?.avatar[0]?.path;
-    const coverImageLocalPath = req.files?.coverImage[0]?.path;
+    // const coverImageLocalPath = req.files?.coverImage[0]?.path;
+
+    let coverImageLocalPath;
+    if(req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0){
+        coverImageLocalPath = req.files.coverImage[0].path;
+    }
+
 
     // check for avatar
     if (!avatarLocalPath) {
         throw new ApiError(400, 'Please upload an avatar image')
     }
-
 
     // upload images to cloudnary
     // Example: const { secure_url: avatarUrl } = await cloudinary.uploader.upload(avatarLocalPath)
@@ -57,7 +62,7 @@ const registerUser = asyncHandler(async (req, res) => {
         fullName,
         avatar: avatar.url,
         coverImage: coverImage?.url || '',
-        username: username.loLowerCase(),
+        username: username.toLowerCase(),
         email,
         password,
     })
